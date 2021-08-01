@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="76f453f3-b7ab-4842-b81a-4ed2cf9ce899" persistent="false" />
+	<flow name="manual-watermarking-flow" doc:id="a5e2feba-80ac-4b44-9e63-4b5195e2b8ca" >
+		<scheduler doc:name="Scheduler" doc:id="645118c3-1735-44cc-8b8f-1e828e6f5661" >
+			<scheduling-strategy >
+				<fixed-frequency timeUnit="HOURS"/>
+			</scheduling-strategy>
+		</scheduler>
+		<os:retrieve doc:name="LastModifiedDate" doc:id="46461126-ed39-4dc4-ade9-bf161fe99744" key="LastModifiedDate" objectStore="Object_store">
+			<os:default-value ><![CDATA[#["2021-07-17T07:13:30.000Z" as String {format : "yyyy-MM-dd'T'HH:mm:ss.SSS'z'"} as DateTime]]]></os:default-value>
+		</os:retrieve>
+		<salesforce:query doc:id="7a1c059d-edef-46a4-b5d4-3866ee15abe8" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query ><![CDATA[Select ID, Subject, AccountId, ClosedDate, ContactId, LastModifiedDate from Case where LastModifiedDate > :LastModifiedDate]]></salesforce:salesforce-query>
+			<salesforce:parameters ><![CDATA[#[output application/java
+---
+{
+	LastModifiedDate : payload
+}]]]></salesforce:parameters>
+		</salesforce:query>
+		<choice doc:name="Choice" doc:id="42f97369-a88b-42e2-b75d-75eac1c83aa5" >
+			<when expression="#[not isEmpty(payload)]">
+				<os:store doc:name="LastModifiedDate" doc:id="85b773cf-890e-402b-89d9-65e2b4bc629d" key="LastModifiedDate" objectStore="Object_store">
+					<os:value ><![CDATA[#[max(payload.LastModifiedDate)]]]></os:value>
+				</os:store>
+				<logger level="INFO" doc:name="Utilize Delta Records" doc:id="098e8792-6b24-4afd-b2b7-1daf9a47eb15" message="Utilize Delta Records"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="No new Record" doc:id="c9758ad6-281f-4bb9-a098-a968b607dd8b" message="No new Record" />
+			</otherwise>
+		</choice>
+	</flow>
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="ba9175ef-89c0-49f7-acf2-9ce5ea409412" >
+		<salesforce:basic-connection username="xxxxxxx@xxx.com" password="xxxxxxxxxxxx" securityToken="xxxxxxxxxxxxxxxxxxxxxxx">
+			<reconnection >
+				<reconnect />
+			</reconnection>
+		</salesforce:basic-connection>
+	</salesforce:sfdc-config>
+</mule>
